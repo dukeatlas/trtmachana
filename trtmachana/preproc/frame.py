@@ -5,7 +5,7 @@ import uproot
 import sklearn.utils as sku
 import pandas as pd
 
-def create_df(file_name, tree_name, branch_list, max_entries=-1, shuffle=False, pmaxcut=100.0):
+def create_df(file_name, tree_name, branch_list, max_entries=-1, shuffle=False):
     """Creates a pandas dataframe from a list of branches
 
     Given the file name, the tree name, and the branch list, we can
@@ -28,6 +28,12 @@ def create_df(file_name, tree_name, branch_list, max_entries=-1, shuffle=False, 
     -------
     pandas.DataFrame
         Returns the constructed pandas DataFrame
+
+    Examples
+    --------
+
+    >>> import trtmachana.preproc as trtpp
+    >>> df = trtpp.create_df('inputfile.root','inputtree',['pt','eta'])
 
     """
     tree   = uproot.open(file_name)[tree_name]
