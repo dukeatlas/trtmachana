@@ -1,3 +1,4 @@
+from __future__ import print_function
 from sklearn import svm
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve, auc
@@ -10,6 +11,7 @@ import matplotlib.pyplot as plt
 import collections
 from collections import OrderedDict
 from datetime import datetime
+import pickle
 import os
 
 ########################################################
@@ -220,33 +222,33 @@ def plot_roc(model_lists, m_path):
 
 ########################################################
 # 
-def plot_acc_loss_vs_epoch(history, name, nname, m_path, do_acc = True, do_loss = False):
+def plot_acc_loss_vs_epoch(history_dict, name, nname, m_path, do_acc = True, do_loss = False):
     expected_keys = ['acc', 'loss', 'val_acc', 'val_loss']
-    keys = history.history.keys()
+    keys = history_dict.keys()
     
     if not (set(keys) <= set(expected_keys)):
-        print("WARNING Unknown keys in history!\nAll keys:")
+        print("WARNING Unknown keys in history_dict!\nAll keys:")
         print(keys)
 
     fig, ax = plt.subplots()
     
     if do_acc and 'acc' in keys:
-        ax.plot(history.history['acc'],
+        ax.plot(history_dict['acc'],
                lw=2, c='black', ls='-',
                label='Train Acc')
            
     if do_loss and 'loss' in keys:
-        ax.plot(history.history['loss'],
+        ax.plot(history_dict['loss'],
                lw=2, c='black', ls='-',
                label='Train Loss')
            
     if do_acc and 'val_acc' in keys:
-        ax.plot(history.history['val_acc'],
+        ax.plot(history_dict['val_acc'],
                lw=2, c='blue', ls='--',
                label='Test Acc')
 
     if do_loss and 'val_loss' in keys:
-        ax.plot(history.history['val_loss'],
+        ax.plot(history_dict['val_loss'],
                lw=2, c='magenta', ls='--',
                label='Test Loss')
 
@@ -271,3 +273,23 @@ def plot_acc_loss_vs_epoch(history, name, nname, m_path, do_acc = True, do_loss 
     plt.legend()
     make_path(m_path)
     fig.savefig(m_path+'/'+fname+'_'+nname+'.pdf')
+
+########################################################
+# 
+def train_or_load(fname):
+	if os.path.isfile(fname+'.h5'):
+		train_or_load = raw_input('Model found on disk, load and continue (y)? If (n) will re-train: ')
+		assert isinstance(train_or_load, str);
+
+		if train_or_load == 'Y' or train_or_load == 'y':
+			train_or_load = 'y'
+			print('\nLoading model')
+		else:
+			train_or_load = 'n'
+			print('\nRe-training model')
+
+	else:
+		print('Model NOT found on disk, training')
+		train_or_load = 'n'
+
+	return train_or_load
