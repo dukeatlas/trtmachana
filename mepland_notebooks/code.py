@@ -220,7 +220,7 @@ def plot_roc(model_lists, m_path):
 
 ########################################################
 # 
-def plot_acc_loss_vs_epoch(history, name, nname, m_path, do_loss = False):
+def plot_acc_loss_vs_epoch(history, name, nname, m_path, do_acc = True, do_loss = False):
     expected_keys = ['acc', 'loss', 'val_acc', 'val_loss']
     keys = history.history.keys()
     
@@ -230,32 +230,44 @@ def plot_acc_loss_vs_epoch(history, name, nname, m_path, do_loss = False):
 
     fig, ax = plt.subplots()
     
-    if 'acc' in keys:
+    if do_acc and 'acc' in keys:
         ax.plot(history.history['acc'],
                lw=2, c='black', ls='-',
                label='Train Acc')
            
     if do_loss and 'loss' in keys:
         ax.plot(history.history['loss'],
-               lw=2, c='orange', ls='-',
+               lw=2, c='black', ls='-',
                label='Train Loss')
            
-    if 'val_acc' in keys:
+    if do_acc and 'val_acc' in keys:
         ax.plot(history.history['val_acc'],
                lw=2, c='blue', ls='--',
                label='Test Acc')
 
     if do_loss and 'val_loss' in keys:
         ax.plot(history.history['val_loss'],
-               lw=2, c='darkgreen', ls='--',
+               lw=2, c='magenta', ls='--',
                label='Test Loss')
 
-    loss_str = ''
-    if do_loss: loss_str = " and Loss"
+    fname = ''
 
-    ax.set_title(name+' Accuracy'+loss_str)
-    ax.set_ylabel('Accuracy'+loss_str)
+    acc_str = ''
+    if do_acc:
+        acc_str = ' Accuracy'
+        fname = 'accuracy'
+
+    loss_str = ''
+    if do_loss:
+        if acc_str != '':
+            loss_str = " and"
+            fname += '_'
+        loss_str += ' Loss'
+        fname += 'loss'
+
+    ax.set_title(name+acc_str+loss_str)
+    ax.set_ylabel(acc_str+loss_str)
     ax.set_xlabel('Epoch')
     plt.legend()
     make_path(m_path)
-    fig.savefig(m_path+'/accuracy_'+nname+'.pdf')
+    fig.savefig(m_path+'/'+fname+'_'+nname+'.pdf')
