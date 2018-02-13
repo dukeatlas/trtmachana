@@ -33,7 +33,7 @@ def make_path(path):
             raise Exception('Problem creating output dir %s !!!\nA file with the same name probably already exists, please fix the conflict and run again.' % output_path)
 
 ########################################################
-# Define a function to create the output dir
+# 
 def create_df(file_name, tree_name, branch_list, max_entries=-1, shuffle=False):
     tree   = uproot.open(file_name)[tree_name]
     nparrs = collections.OrderedDict()
@@ -54,7 +54,7 @@ def create_df(file_name, tree_name, branch_list, max_entries=-1, shuffle=False):
     return df
 
 ########################################################
-# Define a function to create the output dir
+# 
 def create_df_tts_scale(sig_file_name, sig_tree_name, bkg_file_name, bkg_tree_name,
                         branch_list, sig_n=-1, bkg_n=-1, shuffle=False, test_size=0.4,
                         scale_style='default'):
@@ -116,7 +116,7 @@ def create_df_tts_scale(sig_file_name, sig_tree_name, bkg_file_name, bkg_tree_na
     return (df_sig, df_bkg, X_train, X_test, y_train, y_test)
 
 ########################################################
-# Define a function to create the output dir
+# 
 class eprob_roc_generateor(object):
     def __init__(self, sighist, bkghist, primary_axis='x',interpolate=False,
                  xbinrange=(1,1), ybinrange=(1,1), zbinrange=(1,1), npbinning=np.linspace(0.0,1.0,100)):
@@ -152,7 +152,7 @@ class eprob_roc_generateor(object):
     # on.plot(self.sigPoints,self.bkgPoints,*args,**kwargs)
 
 ########################################################
-# Define a function to create the output dir
+# 
 def plot_scale_example(fname,tname,m_path,vname,a=0,b=1):
     arr = uproot.open(fname)[tname].array(vname,np.float32)# ,dtype=np.float32) # dtype= deprecated?
     if vname == 'p' or vname == 'pT':
@@ -169,7 +169,7 @@ def plot_scale_example(fname,tname,m_path,vname,a=0,b=1):
     ax.hist(arr,bins=50,histtype='step',normed=True)
     ax.set_ylabel('Arb. Units')
     ax.set_xlabel('Raw $p_\mathrm{T}$ [GeV]')
-    fig.savefig('sce_nscaled.pdf')
+    fig.savefig(m_path+'/sce_nscaled.pdf')
     fig, ax = plt.subplots()
     ax.hist(arr_scaled,bins=50,histtype='step',normed=True)
     ax.set_ylabel('Arb. Units')
@@ -178,7 +178,7 @@ def plot_scale_example(fname,tname,m_path,vname,a=0,b=1):
     fig.savefig(m_path+'/sce_scaled.pdf')
 
 ########################################################
-# Define a function to create the output dir
+# 
 def plot_classifier_1D_output(el, mu, name, nname, m_path
                              # , title=''
                              ):
@@ -192,7 +192,7 @@ def plot_classifier_1D_output(el, mu, name, nname, m_path
     fig.savefig(m_path+'/'+nname+'_classifier_1D_output.pdf')
 
 ########################################################
-# Define a function to create the output dir
+# 
 def plot_roc(model_lists, m_path):
     fig, ax = plt.subplots()
 
@@ -219,12 +219,11 @@ def plot_roc(model_lists, m_path):
     fig.savefig(m_path+'/roc'+fname+'.pdf')
 
 ########################################################
-# Define a function to create the output dir
+# 
 def plot_acc_loss_vs_epoch(history, name, nname, m_path, do_loss = False):
     expected_keys = ['acc', 'loss', 'val_acc', 'val_loss']
     keys = history.history.keys()
     
-    print('test3')
     if not (set(keys) <= set(expected_keys)):
         print("WARNING Unknown keys in history!\nAll keys:")
         print(keys)
