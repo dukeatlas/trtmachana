@@ -186,7 +186,7 @@ def plot_all_input_vars(input_variables, X_train, Y_train, m_path):
 
     fig = plt.figure('all_input_vars')
 
-    vsize = 8 # inches
+    vsize = 10 # inches
     aspect_ratio = 1.0
     fig.set_size_inches(aspect_ratio*vsize, vsize)
     
@@ -205,14 +205,7 @@ def plot_all_input_vars(input_variables, X_train, Y_train, m_path):
     
     # will only get the handles and lables for the last ax, but that is what we want actually
     handles, labels = ax.get_legend_handles_labels()
-    leg = fig.legend(handles, labels,
-                    # fontsize='large',
-                    bbox_to_anchor=(0.98,0.98), loc='upper left',
-                    #borderaxespad=0.0
-                    )
-    leg._legend_box.align = "left"
-    leg.get_frame().set_edgecolor('white')
-    leg.get_frame().set_facecolor('white')
+    leg = fig.legend(handles, labels, loc='upper right',)
      
     plt.tight_layout()
     make_path(m_path)
@@ -310,7 +303,7 @@ def plot_classifier_1D_output(el, mu, name, nname, m_path
     ax.hist([el,mu],bins=50,histtype='step',normed=True,label=['Electrons','Muons'])
     ax.set_xlabel(name+' output')
     ax.set_ylabel('Arb. Units')
-    ax.legend()
+    ax.legend(loc='upper left')
 #    ax.text(title)
     make_path(m_path)
     fig.savefig(m_path+'/classifier_1D_output_'+nname+'.pdf')
@@ -335,7 +328,7 @@ def plot_roc(model_lists, m_path):
                )
     
     ax.grid()
-    ax.legend()
+    ax.legend(loc='upper left')
     ax.set_xlim([.4,1])
     ax.set_xlabel('True positive')
     ax.set_ylabel('False positive')
