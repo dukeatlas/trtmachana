@@ -2,12 +2,14 @@ from __future__ import print_function
 from sklearn import svm
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve, auc
+from sklearn.externals import joblib
 import sklearn.utils as sku
 import scipy.interpolate as spi
 import uproot
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import gridspec
 import collections
 from collections import OrderedDict
 from datetime import datetime
@@ -33,6 +35,26 @@ def make_path(path):
     except OSError:
         if not os.path.isdir(path):
             raise Exception('Problem creating output dir %s !!!\nA file with the same name probably already exists, please fix the conflict and run again.' % output_path)
+
+########################################################
+# 
+def train_or_load(fname):
+	if os.path.isfile(fname):
+		train_or_load = raw_input('Model found on disk, load and continue (y)? If (n) will re-train: ')
+		assert isinstance(train_or_load, str);
+
+		if train_or_load == 'Y' or train_or_load == 'y':
+			train_or_load = 'y'
+			print('\nLoading model')
+		else:
+			train_or_load = 'n'
+			print('\nRe-training model')
+
+	else:
+		print('Model NOT found on disk, training')
+		train_or_load = 'n'
+
+	return train_or_load
 
 ########################################################
 # 
@@ -76,7 +98,7 @@ def create_df_tts_scale(sig_file_name, sig_tree_name, bkg_file_name, bkg_tree_na
                                         bkg_file_name,bkg_tree_name,
                                         branch_list,sig_n,bkg_n,shuffle)
     
-    X_train, X_test, y_train, y_test = train_test_split(X,y,test_size=test_size)
+    X_train, X_test, Y_train, Y_test = train_test_split(X,y,test_size=test_size)
 
     def scale_to_range(train,test,column,a=0,b=1):
         maximum = train[:,column].max()
@@ -115,7 +137,7 @@ def create_df_tts_scale(sig_file_name, sig_tree_name, bkg_file_name, bkg_tree_na
             else:
                 exit('bad scale style: '+v)
 
-    return (df_sig, df_bkg, X_train, X_test, y_train, y_test)
+    return (df_sig, df_bkg, X_train, X_test, Y_train, Y_test)
 
 ########################################################
 # 
@@ -155,7 +177,50 @@ class eprob_roc_generateor(object):
 
 ########################################################
 # 
-def plot_scale_example(fname,tname,m_path,vname,a=0,b=1):
+def plot_all_input_vars(input_variables, X_train, Y_train, m_path):
+    var_names = list(input_variables)
+    nvars = len(var_names)
+    
+    nwidth = int(np.floor(np.sqrt(nvars)))
+    nheight = int(np.ceil(np.sqrt(nvars)))
+
+    fig = plt.figure('all_input_vars')
+
+    vsize = 8 # inches
+    aspect_ratio = 1.0
+    fig.set_size_inches(aspect_ratio*vsize, vsize)
+    
+    gs = gridspec.GridSpec(nheight, nwidth)
+    gridspec_list = [[i,j] for i in range(nheight) for j in range(nwidth)]
+
+    for nvar, var in enumerate(var_names):
+        ax = plt.subplot(gs[gridspec_list[nvar][0], gridspec_list[nvar][1]])
+
+        ax.hist([X_train[:,nvar][Y_train>0.5],
+                 X_train[:,nvar][Y_train<0.5]],
+                label=['Electrons','Muons'],
+                bins=30, histtype='step', normed=True)
+        
+        ax.set_xlabel(input_variables[var][0])    
+    
+    # will only get the handles and lables for the last ax, but that is what we want actually
+    handles, labels = ax.get_legend_handles_labels()
+    leg = fig.legend(handles, labels,
+                    # fontsize='large',
+                    bbox_to_anchor=(0.98,0.98), loc='upper left',
+                    #borderaxespad=0.0
+                    )
+    leg._legend_box.align = "left"
+    leg.get_frame().set_edgecolor('white')
+    leg.get_frame().set_facecolor('white')
+     
+    plt.tight_layout()
+    make_path(m_path)
+    fig.savefig(m_path+'/all_input_vars.pdf')
+
+########################################################
+# 
+def plot_scale_example(fname,tname,m_path,vname,nname,a=0,b=1):
     arr = uproot.open(fname)[tname].array(vname,np.float32)# ,dtype=np.float32) # dtype= deprecated?
     if vname == 'p' or vname == 'pT':
         arr /= 1000.0
@@ -167,58 +232,20 @@ def plot_scale_example(fname,tname,m_path,vname,a=0,b=1):
     ma = arr.max()
     mi = arr.min()
     arr_scaled = (b-a)*(arr-mi)/(ma-mi)+a
+
+    make_path(m_path)
+
     fig, ax = plt.subplots()
     ax.hist(arr,bins=50,histtype='step',normed=True)
     ax.set_ylabel('Arb. Units')
-    ax.set_xlabel('Raw $p_\mathrm{T}$ [GeV]')
-    fig.savefig(m_path+'/sce_nscaled.pdf')
+    ax.set_xlabel('Raw '+nname)
+    fig.savefig(m_path+'/unscaled_'+vname+'.pdf')
+
     fig, ax = plt.subplots()
     ax.hist(arr_scaled,bins=50,histtype='step',normed=True)
     ax.set_ylabel('Arb. Units')
-    ax.set_xlabel('Feature scaled $p_\mathrm{T}$')
-    make_path(m_path)
-    fig.savefig(m_path+'/sce_scaled.pdf')
-
-########################################################
-# 
-def plot_classifier_1D_output(el, mu, name, nname, m_path
-                             # , title=''
-                             ):
-    fig, ax = plt.subplots()
-    ax.hist([el,mu],bins=50,histtype='step',normed=True,label=['Electrons','Muons'])
-    ax.set_xlabel(name+' output')
-    ax.set_ylabel('Arb. Units')
-    ax.legend()
-#    ax.text(title)
-    make_path(m_path)
-    fig.savefig(m_path+'/'+nname+'_classifier_1D_output.pdf')
-
-########################################################
-# 
-def plot_roc(model_lists, m_path):
-    fig, ax = plt.subplots()
-
-    fname = ''
-    for model in model_lists:
-        # tpr, fpr, name, nname, color, linestyle
-        
-        tpr = model[0]
-        fpr = model[1]
-
-        fname += '_'+model[3]
-        
-        ax.plot(tpr, fpr,
-                lw=2, c=model[4], ls=model[5],
-                label=('%s ROC, Area: %.3f' % (model[2], auc(tpr,fpr)))
-               )
-    
-    ax.grid()
-    ax.legend()
-    ax.set_xlim([.4,1])
-    ax.set_xlabel('True positive')
-    ax.set_ylabel('False positive')
-    make_path(m_path)
-    fig.savefig(m_path+'/roc'+fname+'.pdf')
+    ax.set_xlabel('Feature scaled '+nname)
+    fig.savefig(m_path+'/scaled_'+vname+'.pdf')
 
 ########################################################
 # 
@@ -276,20 +303,42 @@ def plot_acc_loss_vs_epoch(history_dict, name, nname, m_path, do_acc = True, do_
 
 ########################################################
 # 
-def train_or_load(fname):
-	if os.path.isfile(fname+'.h5'):
-		train_or_load = raw_input('Model found on disk, load and continue (y)? If (n) will re-train: ')
-		assert isinstance(train_or_load, str);
+def plot_classifier_1D_output(el, mu, name, nname, m_path
+                             # , title=''
+                             ):
+    fig, ax = plt.subplots()
+    ax.hist([el,mu],bins=50,histtype='step',normed=True,label=['Electrons','Muons'])
+    ax.set_xlabel(name+' output')
+    ax.set_ylabel('Arb. Units')
+    ax.legend()
+#    ax.text(title)
+    make_path(m_path)
+    fig.savefig(m_path+'/classifier_1D_output_'+nname+'.pdf')
 
-		if train_or_load == 'Y' or train_or_load == 'y':
-			train_or_load = 'y'
-			print('\nLoading model')
-		else:
-			train_or_load = 'n'
-			print('\nRe-training model')
+########################################################
+# 
+def plot_roc(model_lists, m_path):
+    fig, ax = plt.subplots()
 
-	else:
-		print('Model NOT found on disk, training')
-		train_or_load = 'n'
+    fname = ''
+    for model in model_lists:
+        # tpr, fpr, name, nname, color, linestyle
+        
+        tpr = model[0]
+        fpr = model[1]
 
-	return train_or_load
+        fname += '_'+model[3]
+        
+        ax.plot(tpr, fpr,
+                lw=2, c=model[4], ls=model[5],
+                label=('%s ROC, Area: %.3f' % (model[2], auc(tpr,fpr)))
+               )
+    
+    ax.grid()
+    ax.legend()
+    ax.set_xlim([.4,1])
+    ax.set_xlabel('True positive')
+    ax.set_ylabel('False positive')
+    make_path(m_path)
+    fig.savefig(m_path+'/roc'+fname+'.pdf')
+
