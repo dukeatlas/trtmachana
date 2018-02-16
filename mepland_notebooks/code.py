@@ -3,18 +3,27 @@ from sklearn import svm
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve, auc
 from sklearn.externals import joblib
+from sklearn.metrics.cluster import normalized_mutual_info_score
+# better but runs out of memory
+# from sklearn.metrics.cluster import adjusted_mutual_info_score 
 import sklearn.utils as sku
 import scipy.interpolate as spi
 import uproot
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from matplotlib import gridspec
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import collections
 from collections import OrderedDict
 from datetime import datetime
 import pickle
 import os
+
+
+# Setup p, m variables that need to be divided to get to GeV units
+pm_vars = ['p', 'pT', 'lep_pT']
 
 ########################################################
 # print out our times nicely
@@ -63,7 +72,8 @@ def create_df(file_name, tree_name, branch_list, max_entries=-1, shuffle=False):
     nparrs = collections.OrderedDict()
     for bn in branch_list:
         nparrs[bn] = tree.array(bn)
-        if bn == 'p': nparrs[bn] /= 1000.0
+        if bn in pm_vars:
+            nparrs[bn] /= 1000.0
     df = pd.DataFrame.from_dict(nparrs)
     
     # TODO WARNING MC is weird, cut to a max pT of 200 GeV by hand!!!
@@ -85,14 +95,14 @@ def create_df_tts_scale(sig_file_name, sig_tree_name, bkg_file_name, bkg_tree_na
 
     def make_sig_bkg(sig_file_name, sig_tree_name, bkg_file_name, bkg_tree_name,
                      branch_list, sig_n=-1, bkg_n=-1, shuffle=False):
-        sig_df = create_df(sig_file_name,sig_tree_name,branch_list,max_entries=sig_n,shuffle=shuffle)
-        bkg_df = create_df(bkg_file_name,bkg_tree_name,branch_list,max_entries=bkg_n,shuffle=shuffle)
-        sig_mtx = sig_df.as_matrix()
-        bkg_mtx = bkg_df.as_matrix()
+        df_sig = create_df(sig_file_name,sig_tree_name,branch_list,max_entries=sig_n,shuffle=shuffle)
+        df_bkg = create_df(bkg_file_name,bkg_tree_name,branch_list,max_entries=bkg_n,shuffle=shuffle)
+        sig_mtx = df_sig.as_matrix()
+        bkg_mtx = df_bkg.as_matrix()
         X = np.concatenate((sig_mtx,bkg_mtx))
         y = np.concatenate((np.ones(sig_mtx.shape[0]),
                             np.zeros(bkg_mtx.shape[0])))
-        return (sig_df, bkg_df, X, y)
+        return (df_sig, df_bkg, X, y)
 
     df_sig, df_bkg, X, y = make_sig_bkg(sig_file_name,sig_tree_name,
                                         bkg_file_name,bkg_tree_name,
@@ -215,7 +225,7 @@ def plot_all_input_vars(input_variables, X_train, Y_train, m_path):
 # 
 def plot_scale_example(fname,tname,m_path,vname,nname,a=0,b=1):
     arr = uproot.open(fname)[tname].array(vname,np.float32)# ,dtype=np.float32) # dtype= deprecated?
-    if vname == 'p' or vname == 'pT':
+    if vname in pm_vars:
         arr /= 1000.0
         
         # TODO WARNING MC is weird, cut to a max pT of 200 GeV by hand!!!
@@ -334,4 +344,66 @@ def plot_roc(model_lists, m_path):
     ax.set_ylabel('False positive')
     make_path(m_path)
     fig.savefig(m_path+'/roc'+fname+'.pdf')
+
+########################################################
+# 
+def mutual_info_plot(var_names_dict, df, name, nname, m_path):
+
+    # setup
+    cols = [col for col in df]
+    col_names = [var_names_dict[col] for col in cols]
+    ncols = len(cols)
+
+    # compute mi's
+    norm_mi = np.zeros((len(cols),len(cols)))
+   
+    for i,col1 in enumerate(cols):
+           for j,col2 in enumerate(cols):
+                raw_matrix = df.as_matrix([col1,col2])
+                norm_mi[i][j] = normalized_mutual_info_score(raw_matrix[:,0], raw_matrix[:,1])
+
+
+    # mask upper right duplicates
+    mask = np.triu(np.ones(norm_mi.shape, dtype=int))
+    norm_mi_masked = np.ma.masked_array(norm_mi, mask=mask)
+
+    # now plot
+    figsize = 10
+    digit_size = 12.5
+    if ncols > 15:
+        figsize = 15
+        digit_size = 11
+
+    fig = plt.figure(figsize=(figsize, figsize))
+    ax = fig.add_subplot(111)
+
+    norm = mpl.colors.Normalize(vmin=0.,vmax=1.)
+    cmap='viridis'
+
+    # create an axes on the right side of ax. The width of cax will be 5%
+    # of ax and the padding between cax and ax will be fixed at 0.1 inch.
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.1)
+
+    img = ax.imshow(norm_mi_masked, cmap=cmap, norm=norm)
+    cb = plt.colorbar(img, cmap=cmap, norm=norm, cax=cax)
+
+    # annotate
+    for (j,i),value in np.ndenumerate(norm_mi):
+        if(i<j): ax.text(i,j,("%.2f" % value), ha='center', va='center', color='fuchsia', size=digit_size)
+
+    ax.set_xticks(np.arange(ncols))
+    ax.set_yticks(np.arange(ncols))
+
+    ax.set_xticklabels(col_names, rotation='vertical')
+    ax.set_yticklabels(col_names)
+
+    plt.figtext(0.5, 0.89, name, ha='center', va='center', size=18)
+
+    plt.figtext(0.96, 0.8, "(Dependent)", rotation='vertical', ha='center', va='center', size=16)
+    plt.figtext(0.96, 0.22, "(Independent)", rotation='vertical', ha='center', va='center', size=16)
+    plt.figtext(0.96, 0.5, "NMI", rotation='vertical', ha='center', va='center', size=18)
+
+    make_path(m_path)
+    fig.savefig(m_path+'/mutual_information_'+nname+'.pdf')
 
