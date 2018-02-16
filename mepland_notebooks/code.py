@@ -77,7 +77,7 @@ def create_df(file_name, tree_name, branch_list, max_entries=-1, shuffle=False):
     df = pd.DataFrame.from_dict(nparrs)
     
     # TODO WARNING MC is weird, cut to a max pT of 200 GeV by hand!!!
-    df = df[(df.pT <= 200000)]
+    df = df[(df.pT <= 200)]
     
     if shuffle:
         column_names = df.columns.values.tolist()
@@ -113,6 +113,7 @@ def create_df_tts_scale(sig_file_name, sig_tree_name, bkg_file_name, bkg_tree_na
     def scale_to_range(train,test,column,a=0,b=1):
         maximum = train[:,column].max()
         minimum = train[:,column].min()
+        # TODO Couldn't the test dataset contain a value outside of these min / max then?!?!
         mmdiff = maximum - minimum
         train[:,column] = (b-a)*(train[:,column] - minimum)/(mmdiff) + a
         test[:,column]  = (b-a)*(test[:,column] - minimum)/(mmdiff) + a
@@ -358,9 +359,9 @@ def mutual_info_plot(var_names_dict, df, name, nname, m_path):
     norm_mi = np.zeros((len(cols),len(cols)))
    
     for i,col1 in enumerate(cols):
-           for j,col2 in enumerate(cols):
-                raw_matrix = df.as_matrix([col1,col2])
-                norm_mi[i][j] = normalized_mutual_info_score(raw_matrix[:,0], raw_matrix[:,1])
+        for j,col2 in enumerate(cols[:i]):
+            raw_matrix = df.as_matrix([col1,col2])
+            norm_mi[i][j] = normalized_mutual_info_score(raw_matrix[:,0], raw_matrix[:,1])
 
 
     # mask upper right duplicates
