@@ -1,0 +1,5 @@
+*.pdf
+*.root
+models
+plots
+data
