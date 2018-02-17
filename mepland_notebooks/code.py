@@ -7,6 +7,7 @@ from sklearn.metrics.cluster import normalized_mutual_info_score
 # better but runs out of memory
 # from sklearn.metrics.cluster import adjusted_mutual_info_score 
 import sklearn.utils as sku
+from sklearn.utils import shuffle
 import scipy.interpolate as spi
 import uproot
 import pandas as pd
@@ -20,6 +21,7 @@ from collections import OrderedDict
 from datetime import datetime
 import pickle
 import os
+import re
 
 
 # Setup p, m variables that need to be divided to get to GeV units
@@ -90,7 +92,7 @@ def create_df(file_name, tree_name, branch_list, max_entries=-1, shuffle=False):
 ########################################################
 # 
 def create_df_tts_scale(sig_file_name, sig_tree_name, bkg_file_name, bkg_tree_name,
-                        branch_list, sig_n=-1, bkg_n=-1, shuffle=False, test_size=0.4,
+                        branch_list, sig_n=-1, bkg_n=-1, shuffle=False, test_size=0.2,
                         scale_style='default'):
 
     def make_sig_bkg(sig_file_name, sig_tree_name, bkg_file_name, bkg_tree_name,
@@ -108,12 +110,11 @@ def create_df_tts_scale(sig_file_name, sig_tree_name, bkg_file_name, bkg_tree_na
                                         bkg_file_name,bkg_tree_name,
                                         branch_list,sig_n,bkg_n,shuffle)
     
-    X_train, X_test, Y_train, Y_test = train_test_split(X,y,test_size=test_size)
+    X_train, X_test, y_train, y_test = train_test_split(X,y,test_size=test_size)
 
     def scale_to_range(train,test,column,a=0,b=1):
         maximum = train[:,column].max()
         minimum = train[:,column].min()
-        # TODO Couldn't the test dataset contain a value outside of these min / max then?!?!
         mmdiff = maximum - minimum
         train[:,column] = (b-a)*(train[:,column] - minimum)/(mmdiff) + a
         test[:,column]  = (b-a)*(test[:,column] - minimum)/(mmdiff) + a
@@ -148,7 +149,81 @@ def create_df_tts_scale(sig_file_name, sig_tree_name, bkg_file_name, bkg_tree_na
             else:
                 exit('bad scale style: '+v)
 
-    return (df_sig, df_bkg, X_train, X_test, Y_train, Y_test)
+    return (df_sig, df_bkg, X_train, X_test, y_train, y_test)
+
+
+########################################################
+# 
+def create_fixed_test_shuffled_train_and_scale(sig_file_name, sig_tree_name, bkg_file_name, bkg_tree_name,
+                        branch_list, sig_n=-1, bkg_n=-1, test_size=0.2,
+                        scale_style='default', rnd_seed=7):
+
+    df_sig_all_rows = create_df(sig_file_name,sig_tree_name,branch_list,max_entries=sig_n,shuffle=False)
+    df_bkg_all_rows = create_df(bkg_file_name,bkg_tree_name,branch_list,max_entries=bkg_n,shuffle=False)
+
+    min_m_sig_bkg_all_rows = min(len(df_sig_all_rows.index), len(df_bkg_all_rows.index)) 
+    test_m = int(test_size*min_m_sig_bkg_all_rows)
+
+    df_sig_test  = df_sig_all_rows.iloc[:test_m,:] # Take first test_m rows, unshuffled so they are always the same run after run
+    df_sig_train = df_sig_all_rows.iloc[test_m:,:] # Take remaining rows to the end, unshuffled so they are always the same run after run
+
+    df_bkg_test  = df_bkg_all_rows.iloc[:test_m,:] # Take first test_m rows, unshuffled so they are always the same run after run
+    df_bkg_train = df_bkg_all_rows.iloc[test_m:,:] # Take remaining rows to the end, unshuffled so they are always the same run after run
+
+    def dfs_to_mtxs(df_sig, df_bkg, do_shuffle=True):
+        sig_mtx = df_sig.as_matrix()
+        bkg_mtx = df_bkg.as_matrix()
+        X = np.concatenate((sig_mtx, bkg_mtx))
+        y = np.concatenate((np.ones(sig_mtx.shape[0]), np.zeros(bkg_mtx.shape[0])))
+
+        if do_shuffle:
+            X, y = shuffle(X, y, random_state=rnd_seed)
+
+        return X, y
+
+    X_train, y_train = dfs_to_mtxs(df_sig_train, df_bkg_train, do_shuffle=True)
+    X_test, y_test = dfs_to_mtxs(df_sig_test, df_bkg_test, do_shuffle=True)
+
+    def scale_to_range(train,test,column,a=0,b=1):
+        maximum = train[:,column].max()
+        minimum = train[:,column].min()
+        mmdiff = maximum - minimum
+        train[:,column] = (b-a)*(train[:,column] - minimum)/(mmdiff) + a
+        test[:,column]  = (b-a)*(test[:,column] - minimum)/(mmdiff) + a
+        return dict(minimum=minimum,maximum=maximum,a=a,b=b)
+
+    def standardization(train,test,column):
+        mean, std = train[:,column].mean(), train[:,column].std()
+        train[:,column] = (train[:,column] - mean)/std
+        return dict(mean=mean,std=std)
+
+    if isinstance(scale_style,str):
+        for i in range(X_train.shape[1]):
+            if scale_style == 'default':
+                _ = scale_to_range(X_train,X_test,i)
+            elif scale_style == 'symmetric':
+                _ = scale_to_range(X_train,X_test,i,-1,1)
+            elif scale_style == 'standardize':
+                _ = standardization(X_train,X_test,i)
+            elif scale_style == 'leave':
+                continue
+            else:
+                exit('bad scale style: '+scale_style)
+
+    if isinstance(scale_style,dict):
+        for k, v in scale_style.items():
+            if v == 'leave':
+                continue
+            elif v == 'default':
+                _ = scale_to_range(X_train,X_test,k)
+            elif v == 'symmetric':
+                _ = scale_to_range(X_train,X_test,k,-1,1)
+            elif v == 'standardize':
+                _ = standardization(X_train,X_test,k)
+            else:
+                exit('bad scale style: '+v)
+
+    return (df_sig_all_rows, df_bkg_all_rows, X_train, X_test, y_train, y_test)
 
 ########################################################
 # 
@@ -188,7 +263,24 @@ class eprob_roc_generateor(object):
 
 ########################################################
 # 
-def plot_all_input_vars(input_variables, X_train, Y_train, m_path):
+def slice_and_plot_all_input_vars(cut_var, nname, bins, input_variables, X_train, y_train, m_path):
+    var_names = list(input_variables)
+    cut_index = var_names.index(cut_var)
+
+    for i in range(len(bins)-1):
+        lbin = bins[i]
+        rbin = bins[i+1]
+
+        selection = np.where( (lbin <= X_train[:,cut_index]) & (X_train[:,cut_index] < rbin))
+
+        name = '{1} < {0} < {2}'.format(nname, lbin, rbin)
+        fname = 'all_input_vars_sliced_{0}_{1}_{2}'.format(cut_var, lbin, rbin)
+
+        plot_all_input_vars(input_variables, X_train[selection], y_train[selection], m_path, name, fname, True)
+
+########################################################
+# 
+def plot_all_input_vars(input_variables, X_train, y_train, m_path, name='', fname='all_input_vars', fix_xlim=False):
     var_names = list(input_variables)
     nvars = len(var_names)
     
@@ -207,20 +299,33 @@ def plot_all_input_vars(input_variables, X_train, Y_train, m_path):
     for nvar, var in enumerate(var_names):
         ax = plt.subplot(gs[gridspec_list[nvar][0], gridspec_list[nvar][1]])
 
-        ax.hist([X_train[:,nvar][Y_train>0.5],
-                 X_train[:,nvar][Y_train<0.5]],
+        ax.hist([X_train[:,nvar][y_train>0.5],
+                 X_train[:,nvar][y_train<0.5]],
                 label=['Electrons','Muons'],
                 bins=30, histtype='step', normed=True)
         
-        ax.set_xlabel(input_variables[var][0])    
-    
+        ax.set_xlabel(input_variables[var][0])
+  
+        if fix_xlim: 
+            scale_style = input_variables[var][1]
+            if scale_style == 'default':
+                ax.set_xlim(0.,1.)
+            elif scale_style == 'symmetric':
+                ax.set_xlim(-1.,1.)
+            elif scale_style != 'standardize' and scale_style != 'leave':
+                print("Unrecognized scale_style {0}, leaving axis auto!".format(scale_style))
+ 
     # will only get the handles and lables for the last ax, but that is what we want actually
     handles, labels = ax.get_legend_handles_labels()
     leg = fig.legend(handles, labels, loc='upper right',)
+
+    plt.figtext(0.5, 0.05, name, ha='center', va='center', size=18)
      
     plt.tight_layout()
     make_path(m_path)
-    fig.savefig(m_path+'/all_input_vars.pdf')
+    fig.savefig(m_path+'/'+fname+'.pdf')
+    plt.show()
+    fig.clf()
 
 ########################################################
 # 
@@ -311,7 +416,9 @@ def plot_classifier_1D_output(el, mu, name, nname, m_path
                              # , title=''
                              ):
     fig, ax = plt.subplots()
-    ax.hist([el,mu],bins=50,histtype='step',normed=True,label=['Electrons','Muons'])
+    ax.hist(el,bins=50,histtype='step',normed=True,label='Electrons')
+    ax.hist(mu,bins=50,histtype='step',normed=True,label='Muons')
+    # ax.hist([el,mu],bins=50,histtype='step',normed=True,label=['Electrons','Muons'])
     ax.set_xlabel(name+' output')
     ax.set_ylabel('Arb. Units')
     ax.legend(loc='upper left')
@@ -363,7 +470,6 @@ def mutual_info_plot(var_names_dict, df, name, nname, m_path):
             raw_matrix = df.as_matrix([col1,col2])
             norm_mi[i][j] = normalized_mutual_info_score(raw_matrix[:,0], raw_matrix[:,1])
 
-
     # mask upper right duplicates
     mask = np.triu(np.ones(norm_mi.shape, dtype=int))
     norm_mi_masked = np.ma.masked_array(norm_mi, mask=mask)
@@ -391,7 +497,10 @@ def mutual_info_plot(var_names_dict, df, name, nname, m_path):
 
     # annotate
     for (j,i),value in np.ndenumerate(norm_mi):
-        if(i<j): ax.text(i,j,("%.2f" % value), ha='center', va='center', color='fuchsia', size=digit_size)
+        if(i<j):
+            # https://stackoverflow.com/questions/11010683/how-to-have-negative-zero-always-formatted-as-positive-zero-in-a-python-string/36604981#36604981
+            value_str = re.sub(r"^-(0\.?00*)$", r"\1", "%.2f" % value)
+            ax.text(i,j,value_str, ha='center', va='center', color='fuchsia', size=digit_size)
 
     ax.set_xticks(np.arange(ncols))
     ax.set_yticks(np.arange(ncols))
