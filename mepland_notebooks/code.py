@@ -49,7 +49,7 @@ def make_path(path):
 
 ########################################################
 # 
-def train_or_load(fname):
+def train_or_load(fname, default_to_load):
     if os.path.isfile(fname):
 
         if default_to_load:
