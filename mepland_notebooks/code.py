@@ -49,23 +49,28 @@ def make_path(path):
 
 ########################################################
 # 
-def train_or_load(fname):
-	if os.path.isfile(fname):
-		train_or_load = raw_input('Model found on disk, load and continue (y)? If (n) will re-train: ')
-		assert isinstance(train_or_load, str);
+def train_or_load(fname, default_to_load):
+    if os.path.isfile(fname):
 
-		if train_or_load == 'Y' or train_or_load == 'y':
-			train_or_load = 'y'
-			print('\nLoading model')
-		else:
-			train_or_load = 'n'
-			print('\nRe-training model')
+        if default_to_load:
+            print("Model found on disk, loading by default")
+            train_or_load = 'y'
+        else:
+            train_or_load = raw_input('Model found on disk, load and continue (y)? If (n) will re-train: ')
+            assert isinstance(train_or_load, str);
 
-	else:
-		print('Model NOT found on disk, training')
-		train_or_load = 'n'
+            if train_or_load == 'Y' or train_or_load == 'y':
+                train_or_load = 'y'
+                print('\nLoading model')
+            else:
+	             train_or_load = 'n'
+	             print('\nRe-training model')
 
-	return train_or_load
+    else:
+        print('Model NOT found on disk, training')
+        train_or_load = 'n'
+
+    return train_or_load
 
 ########################################################
 # 
@@ -358,8 +363,8 @@ def plot_scale_example(fname,tname,m_path,vname,nname,a=0,b=1):
 
 ########################################################
 # 
-def plot_acc_loss_vs_epoch(history_dict, name, nname, m_path, do_acc = True, do_loss = False):
-    expected_keys = ['acc', 'loss', 'val_acc', 'val_loss']
+def plot_acc_loss_vs_epoch(history_dict, name, nname, m_path, val_or_test = 'Test', do_acc = True, do_loss = False):
+    expected_keys = ['acc', 'loss', 'val_acc', 'val_loss', 'acc_std', 'loss_std', 'val_acc_std', 'val_loss_std']
     keys = history_dict.keys()
     
     if not (set(keys) <= set(expected_keys)):
@@ -372,21 +377,40 @@ def plot_acc_loss_vs_epoch(history_dict, name, nname, m_path, do_acc = True, do_
         ax.plot(history_dict['acc'],
                lw=2, c='black', ls='-',
                label='Train Acc')
-           
+
+        if 'acc_std' in keys:
+            ax.errorbar(range(len(history_dict['acc'])), history_dict['acc'], yerr=history_dict['acc_std'],
+                        fmt='none', capsize=4, elinewidth=1.5, markeredgewidth=1.5, c='black')
+ 
     if do_loss and 'loss' in keys:
         ax.plot(history_dict['loss'],
                lw=2, c='black', ls='-',
                label='Train Loss')
+
+        if 'loss_std' in keys:
+            ax.errorbar(range(len(history_dict['loss'])), history_dict['loss'], yerr=history_dict['loss_std'],
+                        fmt='none', capsize=4, elinewidth=1.5, markeredgewidth=1.5, c='black')
            
     if do_acc and 'val_acc' in keys:
         ax.plot(history_dict['val_acc'],
                lw=2, c='blue', ls='--',
-               label='Test Acc')
+               label=val_or_test+' Acc')
+
+        if 'val_acc_std' in keys:
+            ax.errorbar(range(len(history_dict['val_acc'])), history_dict['val_acc'], yerr=history_dict['val_acc_std'],
+                        fmt='none', capsize=4, elinewidth=1.5, markeredgewidth=1.5, c='blue')
+
 
     if do_loss and 'val_loss' in keys:
         ax.plot(history_dict['val_loss'],
                lw=2, c='magenta', ls='--',
-               label='Test Loss')
+               label=val_or_test+' Loss')
+
+        if 'val_loss_std' in keys:
+            ax.errorbar(range(len(history_dict['val_loss'])), history_dict['val_loss'], yerr=history_dict['val_loss_std'],
+                        fmt='none', capsize=4, elinewidth=1.5, markeredgewidth=1.5, c='magenta')
+
+
 
     fname = ''
 
@@ -517,3 +541,46 @@ def mutual_info_plot(var_names_dict, df, name, nname, m_path):
     make_path(m_path)
     fig.savefig(m_path+'/mutual_information_'+nname+'.pdf')
 
+########################################################
+# 
+def process_kfold_hist_elements(accs, losses, val_accs, val_losses, plots_path, name = 'NN (kfold)', nname = 'nn_kfold'):
+
+    accs_mtx = np.array(accs)
+    losses_mtx = np.array(losses)
+    val_accs_mtx = np.array(val_accs)
+    val_losses_mtx = np.array(val_losses)
+
+    def print_final_mean_std(mtx, name):
+        mean = np.mean(mtx[:,-1])
+        std = np.std(mtx[:,-1])
+        print("{}: {:.3f} +/- {:.3f}".format(name, mean, std))
+        
+    print_final_mean_std(accs_mtx,"Acc")
+    print_final_mean_std(losses_mtx,"Loss")
+    print_final_mean_std(val_accs_mtx,"Validation Acc")
+    print_final_mean_std(val_losses_mtx,"Validation Loss")
+    
+    def dicts_of_col_mean_std(mtx,name):
+        means = np.zeros(mtx.shape[1])
+        stds = np.zeros(mtx.shape[1])
+    
+        for i in range(mtx.shape[1]):
+            means[i] = np.mean(mtx[:,i])
+            stds[i] = np.std(mtx[:,i])
+
+        return {name:list(means), name+'_std':list(stds)}
+
+    acc_dict = dicts_of_col_mean_std(accs_mtx,'acc')
+    loss_dict = dicts_of_col_mean_std(losses_mtx,'loss')
+    val_acc_dict = dicts_of_col_mean_std(val_accs_mtx,'val_acc')
+    val_loss_dict = dicts_of_col_mean_std(val_losses_mtx,'val_loss')
+    
+    hist_dict_model_kfold_mean_std = acc_dict.copy()
+    hist_dict_model_kfold_mean_std.update(loss_dict)
+    hist_dict_model_kfold_mean_std.update(val_acc_dict)
+    hist_dict_model_kfold_mean_std.update(val_loss_dict)
+
+    # print(hist_dict_model_kfold_mean_std)
+           
+    plot_acc_loss_vs_epoch(hist_dict_model_kfold_mean_std, name+' Mean', nname+'_mean', plots_path, 'Validation', True, False)
+    plot_acc_loss_vs_epoch(hist_dict_model_kfold_mean_std, name+' Mean', nname+'_mean', plots_path, 'Validation', False, True)
