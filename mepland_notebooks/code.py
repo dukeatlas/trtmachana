@@ -278,7 +278,7 @@ def slice_and_plot_all_input_vars(cut_var, nname, bins, input_variables, X_train
 
         selection = np.where( (lbin <= X_train[:,cut_index]) & (X_train[:,cut_index] < rbin))
 
-        name = '{1} < {0} < {2}'.format(nname, lbin, rbin)
+        name = '${1} \leq$ {0} $< {2}$'.format(nname, lbin, rbin)
         fname = 'all_input_vars_sliced_{0}_{1}_{2}'.format(cut_var, lbin, rbin)
 
         plot_all_input_vars(input_variables, X_train[selection], y_train[selection], m_path, name, fname, True)
@@ -324,7 +324,7 @@ def plot_all_input_vars(input_variables, X_train, y_train, m_path, name='', fnam
     handles, labels = ax.get_legend_handles_labels()
     leg = fig.legend(handles, labels, loc='upper right',)
 
-    plt.figtext(0.5, 0.05, name, ha='center', va='center', size=18)
+    plt.figtext(0.82, 0.08, name, ha='center', va='center', size=18)
      
     plt.tight_layout()
     make_path(m_path)
