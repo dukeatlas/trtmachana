@@ -27,6 +27,12 @@ import re
 # Setup p, m variables that need to be divided to get to GeV units
 pm_vars = ['p', 'pT', 'lep_pT']
 
+# Setup bins for pT, eta re-weighting
+pT_bins = [0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+# eta_bins = [-1+i*0.05 for i in range(40)]
+eta_bins = [-1.0, -0.95, -0.9, -0.85, -0.8, -0.75, -0.7, -0.65, -0.6, -0.55, -0.5, -0.45, -0.4, -0.35, -0.3, -0.25, -0.2, -0.15, -0.1, -0.05, 0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0]
+
+
 ########################################################
 # print out our times nicely
 def strfdelta(tdelta, fmt):
@@ -285,14 +291,11 @@ def slice_and_plot_all_input_vars(cut_var, nname, bins, input_variables, X_train
 
 ########################################################
 # 
-def plot_all_input_vars(input_variables, X_train, y_train, m_path, name='', fname='all_input_vars', fix_xlim=False):
+def plot_all_input_vars(input_variables, X_train, y_train, m_path, name='', fname='all_input_vars'):
     var_names = list(input_variables)
     nvars = len(var_names)
     
-    nwidth = int(np.floor(np.sqrt(nvars)))
-    nheight = int(np.ceil(np.sqrt(nvars)))
-
-    fig = plt.figure('all_input_vars')
+    fig = plt.figure(fname)
 
     vsize = 10 # inches
     aspect_ratio = 1.0
@@ -584,3 +587,11 @@ def process_kfold_hist_elements(accs, losses, val_accs, val_losses, plots_path, 
            
     plot_acc_loss_vs_epoch(hist_dict_model_kfold_mean_std, name+' Mean', nname+'_mean', plots_path, 'Validation', True, False)
     plot_acc_loss_vs_epoch(hist_dict_model_kfold_mean_std, name+' Mean', nname+'_mean', plots_path, 'Validation', False, True)
+
+
+########################################################
+# TODO move weighting code here
+
+########################################################
+# TODO
+
