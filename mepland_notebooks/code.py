@@ -28,10 +28,11 @@ import re
 pm_vars = ['p', 'pT', 'lep_pT']
 
 # Setup bins for pT, eta re-weighting
-pT_bins = [0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+pT_bins_list = [0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 # eta_bins = [-1+i*0.05 for i in range(40)]
-eta_bins = [-1.0, -0.95, -0.9, -0.85, -0.8, -0.75, -0.7, -0.65, -0.6, -0.55, -0.5, -0.45, -0.4, -0.35, -0.3, -0.25, -0.2, -0.15, -0.1, -0.05, 0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0]
-
+eta_bins_list = [-1.0, -0.95, -0.9, -0.85, -0.8, -0.75, -0.7, -0.65, -0.6, -0.55, -0.5, -0.45, -0.4, -0.35, -0.3, -0.25, -0.2, -0.15, -0.1, -0.05, 0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0]
+pT_bins = np.array(pT_bins_list)
+eta_bins = np.array(eta_bins_list)
 
 ########################################################
 # print out our times nicely
@@ -199,8 +200,18 @@ def create_fixed_test_shuffled_train_and_scale(sig_file_name, sig_tree_name, bkg
         maximum = train[:,column].max()
         minimum = train[:,column].min()
         mmdiff = maximum - minimum
-        train[:,column] = (b-a)*(train[:,column] - minimum)/(mmdiff) + a
-        test[:,column]  = (b-a)*(test[:,column] - minimum)/(mmdiff) + a
+
+        if(mmdiff != 0.):
+            train[:,column] = (b-a)*(train[:,column] - minimum)/(mmdiff) + a
+            test[:,column]  = (b-a)*(test[:,column] - minimum)/(mmdiff) + a
+        else:
+            print("WARNING in scale_to_range the range of column %d is 0.0 (max = %.3f, min = %.3f.)" % (column, maximum, minimum))
+            if(np.all(train[:,column] == maximum) and np.all(test[:,column] == maximum)):
+                print("You should not be using this variable, it's always the same!")
+            print("Please restart and remove it, in the mean time setting all values to 1.0 and attempting to continue")
+            train[:,column] = 1.0
+            test[:,column]  = 1.0
+
         return dict(minimum=minimum,maximum=maximum,a=a,b=b)
 
     def standardization(train,test,column):
@@ -274,7 +285,7 @@ class eprob_roc_generateor(object):
 
 ########################################################
 # 
-def slice_and_plot_all_input_vars(cut_var, nname, bins, input_variables, X_train, y_train, m_path):
+def slice_and_plot_all_input_vars(cut_var, nname, bins, input_variables, X_train, y_train, m_path, w = None):
     var_names = list(input_variables)
     cut_index = var_names.index(cut_var)
 
@@ -287,17 +298,28 @@ def slice_and_plot_all_input_vars(cut_var, nname, bins, input_variables, X_train
         name = '${1} \leq$ {0} $< {2}$'.format(nname, lbin, rbin)
         fname = 'all_input_vars_sliced_{0}_{1}_{2}'.format(cut_var, lbin, rbin)
 
-        plot_all_input_vars(input_variables, X_train[selection], y_train[selection], m_path, name, fname, True)
+        plot_all_input_vars(input_variables, X_train[selection], y_train[selection], m_path, name, fname, True, w = None)
 
 ########################################################
 # 
-def plot_all_input_vars(input_variables, X_train, y_train, m_path, name='', fname='all_input_vars'):
+def plot_all_input_vars(input_variables, X_train, y_train, m_path, name='', fname='all_input_vars', fix_xlim=False, w = None):
     var_names = list(input_variables)
     nvars = len(var_names)
-    
+
+    nwidth = int(np.floor(np.sqrt(nvars)))
+    nheight = int(np.ceil(np.sqrt(nvars)))
+    while nwidth*nheight < nvars:
+        nheight += 1
+
+    w_sig = None
+    w_bkg = None
+    if w is not None:
+        w_sig = w[y_train>0.5]
+        w_bkg = w[y_train<0.5]
+ 
     fig = plt.figure(fname)
 
-    vsize = 10 # inches
+    vsize = 11 # inches
     aspect_ratio = 1.0
     fig.set_size_inches(aspect_ratio*vsize, vsize)
     
@@ -307,10 +329,14 @@ def plot_all_input_vars(input_variables, X_train, y_train, m_path, name='', fnam
     for nvar, var in enumerate(var_names):
         ax = plt.subplot(gs[gridspec_list[nvar][0], gridspec_list[nvar][1]])
 
-        ax.hist([X_train[:,nvar][y_train>0.5],
-                 X_train[:,nvar][y_train<0.5]],
-                label=['Electrons','Muons'],
-                bins=30, histtype='step', normed=True)
+        ax.hist(X_train[:,nvar][y_train>0.5],
+                label='Signal ($e$)',
+                bins=30, histtype='step', weights=w_sig, normed=True)
+
+        ax.hist(X_train[:,nvar][y_train<0.5],
+                label='Background',
+                bins=30, histtype='step', weights=w_bkg, normed=True)
+
         
         ax.set_xlabel(input_variables[var][0])
   
@@ -327,7 +353,7 @@ def plot_all_input_vars(input_variables, X_train, y_train, m_path, name='', fnam
     handles, labels = ax.get_legend_handles_labels()
     leg = fig.legend(handles, labels, loc='upper right',)
 
-    plt.figtext(0.82, 0.08, name, ha='center', va='center', size=18)
+    plt.figtext(0.83, 0.1, name, ha='center', va='center', size=18)
      
     plt.tight_layout()
     make_path(m_path)
@@ -357,12 +383,16 @@ def plot_scale_example(fname,tname,m_path,vname,nname,a=0,b=1):
     ax.set_ylabel('Arb. Units')
     ax.set_xlabel('Raw '+nname)
     fig.savefig(m_path+'/unscaled_'+vname+'.pdf')
+    plt.show()
+    fig.clf()
 
     fig, ax = plt.subplots()
     ax.hist(arr_scaled,bins=50,histtype='step',normed=True)
     ax.set_ylabel('Arb. Units')
     ax.set_xlabel('Feature scaled '+nname)
     fig.savefig(m_path+'/scaled_'+vname+'.pdf')
+    plt.show()
+    fig.clf()
 
 ########################################################
 # 
@@ -436,6 +466,8 @@ def plot_acc_loss_vs_epoch(history_dict, name, nname, m_path, val_or_test = 'Tes
     plt.legend()
     make_path(m_path)
     fig.savefig(m_path+'/'+fname+'_'+nname+'.pdf')
+    plt.show()
+    fig.clf()
 
 ########################################################
 # 
@@ -452,6 +484,8 @@ def plot_classifier_1D_output(el, mu, name, nname, m_path
 #    ax.text(title)
     make_path(m_path)
     fig.savefig(m_path+'/classifier_1D_output_'+nname+'.pdf')
+    plt.show()
+    fig.clf()
 
 ########################################################
 # 
@@ -479,6 +513,8 @@ def plot_roc(model_lists, m_path):
     ax.set_ylabel('False positive')
     make_path(m_path)
     fig.savefig(m_path+'/roc'+fname+'.pdf')
+    plt.show()
+    fig.clf()
 
 ########################################################
 # 
@@ -543,6 +579,8 @@ def mutual_info_plot(var_names_dict, df, name, nname, m_path):
 
     make_path(m_path)
     fig.savefig(m_path+'/mutual_information_'+nname+'.pdf')
+    plt.show()
+    fig.clf()
 
 ########################################################
 # 
@@ -590,8 +628,100 @@ def process_kfold_hist_elements(accs, losses, val_accs, val_losses, plots_path, 
 
 
 ########################################################
-# TODO move weighting code here
+# 
+def weight_pT_eta_uniform(input_variables, X_train, y_train, X_test, y_test):
+    var_names = list(input_variables)
+    pT_index = var_names.index('pT')
+    eta_index = var_names.index('eta')
+    
+    sig_pT_eta_hist = np.histogram2d( X_train[:,pT_index][y_train>0.5],
+                                      X_train[:,eta_index][y_train>0.5],
+                                      bins=[pT_bins, eta_bins])[0]
+    
+    sig_pT_eta_hist[sig_pT_eta_hist <= 0] = 1. # fix div 0 error
+    W_sig_pT_eta = np.reciprocal(sig_pT_eta_hist, dtype=float)
+
+    bkg_pT_eta_hist = np.histogram2d( X_train[:,pT_index][y_train<0.5],
+                                      X_train[:,eta_index][y_train<0.5],
+                                      bins=[pT_bins, eta_bins])[0]
+    
+    bkg_pT_eta_hist[bkg_pT_eta_hist <= 0] = 1. # fix div 0 error
+    W_bkg_pT_eta = np.reciprocal(bkg_pT_eta_hist, dtype=float)
+
+   
+    def find_weights(X, y, W_sig_pT_eta, W_bkg_pT_eta):
+        w = np.ones(X.shape[0])
+        for i,row in enumerate(X):
+            W_pT_index = int(np.digitize(row[pT_index], pT_bins))-1
+            if row[pT_index] >= pT_bins[-1]: W_pT_index -= 1 # if equal or beyond just use highest bin weight
+            
+            W_eta_index = int(np.digitize(row[eta_index], eta_bins))-1
+            if row[eta_index] >= eta_bins[-1]: W_eta_index -= 1 # if equal or beyond just use highest bin weight
+
+            
+            # print("pT %.2f, eta %.2f" %(row[pT_index], row[eta_index]))
+            # print("pT index %d, eta index %d" %(W_pT_index, W_eta_index))
+            
+            if y[i] > 0.5:
+                w[i]= W_sig_pT_eta[W_pT_index, W_eta_index]
+            else:
+                w[i]= W_bkg_pT_eta[W_pT_index, W_eta_index]
+                
+        return w
+    
+    w_train = find_weights(X_train, y_train, W_sig_pT_eta, W_bkg_pT_eta)
+    w_test = find_weights(X_test, y_test, W_sig_pT_eta, W_bkg_pT_eta)
+
+    return w_train, w_test
 
 ########################################################
-# TODO
+# 
+def plot_pT_eta(input_variables, X, y, m_path, name='$p_{\mathrm{T}}$ vs $\eta$}', fname='pT_eta_hist', w = None):
+    var_names = list(input_variables)
+    pT_index = var_names.index('pT')
+    eta_index = var_names.index('eta')
+  
+    w_sig = None
+    w_bkg = None
+    if w is not None:
+        w_sig = w[y>0.5]
+        w_bkg = w[y<0.5]
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
+    
+    vsize = 10 # inches
+    aspect_ratio = 2.
+    fig.set_size_inches(aspect_ratio*vsize, vsize)
+    
+    cmap='viridis'
+    norm = mpl.colors.Normalize()
 
+    ax1.set_title('Signal ($e$)')
+    ax1.hist2d(X[:,pT_index][y>0.5],
+               X[:,eta_index][y>0.5],
+               bins=[pT_bins, eta_bins],
+               weights=w_sig,
+               cmap=cmap, norm=norm)
+   
+    ax2.set_title('Background')
+    img = ax2.hist2d(X[:,pT_index][y<0.5],
+               X[:,eta_index][y<0.5],
+               bins=[pT_bins, eta_bins],
+               weights=w_bkg,
+               cmap=cmap, norm=norm)
+        
+    ax1.set_xlabel('$p_{\mathrm{T}}$')
+    ax1.set_ylabel('$\eta$')
+    ax2.set_xlabel('$p_{\mathrm{T}}$')
+
+    divider = make_axes_locatable(ax2)
+    cax = divider.append_axes("right", size="5%", pad=0.1)
+    cb = plt.colorbar(img[3], cmap=cmap, norm=norm, cax=cax)
+
+    plt.figtext(0.5, 0.98, name, ha='center', va='center', size=16)
+
+    plt.tight_layout()
+    make_path(m_path)
+    fig.savefig(m_path+'/'+fname+'.pdf')
+    plt.show()
+    fig.clf()
