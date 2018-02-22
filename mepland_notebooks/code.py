@@ -1,4 +1,6 @@
 from __future__ import print_function
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.tree import DecisionTreeClassifier
 from sklearn import svm
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve, auc
@@ -475,9 +477,8 @@ def plot_classifier_1D_output(el, mu, name, nname, m_path
                              # , title=''
                              ):
     fig, ax = plt.subplots()
-    ax.hist(el,bins=50,histtype='step',normed=True,label='Electrons')
-    ax.hist(mu,bins=50,histtype='step',normed=True,label='Muons')
-    # ax.hist([el,mu],bins=50,histtype='step',normed=True,label=['Electrons','Muons'])
+    ax.hist(el,bins=50,histtype='step',normed=True,label='Signal ($e$)')
+    ax.hist(mu,bins=50,histtype='step',normed=True,label='Background')
     ax.set_xlabel(name+' output')
     ax.set_ylabel('Arb. Units')
     ax.legend(loc='upper left')
@@ -509,8 +510,8 @@ def plot_roc(model_lists, m_path):
     ax.grid()
     ax.legend(loc='upper left')
     ax.set_xlim([.4,1])
-    ax.set_xlabel('True positive')
-    ax.set_ylabel('False positive')
+    ax.set_xlabel('True Positive')
+    ax.set_ylabel('False Positive')
     make_path(m_path)
     fig.savefig(m_path+'/roc'+fname+'.pdf')
     plt.show()
