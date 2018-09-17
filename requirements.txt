@@ -1,6 +1,8 @@
 uproot>=2.5.10
-matplotlib
 scikit-learn
+keras
 pandas
 scipy
+numpy
+matplotlib
 jupyter
