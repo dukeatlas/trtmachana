@@ -3,7 +3,7 @@ Matthew Epland
 matthew.epland@duke.edu  
 
 ## Summary
-R&D studies of particle identification in the ATLAS Transition Radiation Tracker (TRT) where conducted utilizing machine learning techniques, with the goal of separating electron tracks from muons. Developed with fellow Duke graduate students Doug Davis and Sourav Sen, and continued by Davis and others within the TRT group. Support Vector Machines (SVM) and Boosted Decision Trees (BDT) from the sklearn library were tested, as well as Neural Networks (NN) in constructed in Keras / Tensorflow.  
+R&D studies of particle identification in the ATLAS Transition Radiation Tracker (TRT) where conducted utilizing machine learning techniques, with the goal of separating electron tracks from muons. Developed with fellow Duke graduate students Doug Davis and Sourav Sen, and continued by Davis and others within the TRT group. Support Vector Machines (SVM) and Boosted Decision Trees (BDT) from the sklearn library were tested, as well as Neural Networks (NN) in constructed in Keras+TensorFlow.  
 
 ## Cloning the Repository
 ssh  
