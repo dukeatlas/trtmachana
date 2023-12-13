@@ -1,0 +1,3 @@
+# ignore mepland_notebooks/notebook py and html files in diffs and github languages stats
+mepland_notebooks/notebook.py linguist-generated=true
+mepland_notebooks/notebook.html linguist-generated=true
